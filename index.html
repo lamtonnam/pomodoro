@@ -10,50 +10,151 @@
             display: flex; flex-direction: column; align-items: center; justify-content: center;
             height: 100vh; margin: 0; background-color: #1f1f1f; color: #ffffff;
         }
-        .timer { font-size: 52px; font-weight: bold; font-family: monospace; margin: 15px 0; color: #2eaadc; }
-        .status { font-size: 16px; color: #aaaaaa; }
-        button {
-            background-color: #2eaadc; color: white; border: none; padding: 8px 18px;
-            border-radius: 6px; font-size: 14px; cursor: pointer; font-weight: bold;
+        .card {
+            background: #2b2b2b; padding: 20px 25px; border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3); text-align: center; width: 280px;
         }
-        button:hover { background-color: #008cc1; }
+        .status { font-size: 16px; color: #aaaaaa; font-weight: 500; }
+        .timer { font-size: 56px; font-weight: bold; font-family: monospace; color: #2eaadc; margin: 5px 0; }
+        .session-info { font-size: 14px; color: #888; margin-bottom: 12px; }
+        
+        .progress-container { width: 100%; background-color: #444; border-radius: 10px; height: 8px; margin-bottom: 15px; overflow: hidden; }
+        .progress-bar { width: 0%; height: 100%; background-color: #2eaadc; transition: width 0.3s ease; }
+
+        .controls { display: flex; gap: 8px; justify-content: center; margin-bottom: 15px; }
+        button {
+            background-color: #2eaadc; color: white; border: none; padding: 8px 14px;
+            border-radius: 6px; font-size: 14px; cursor: pointer; font-weight: bold; flex: 1;
+        }
+        button:hover { opacity: 0.9; }
+        button.reset { background-color: #e05252; }
+        
+        .settings { display: flex; align-items: center; justify-content: space-between; font-size: 12px; color: #ccc; border-top: 1px solid #444; pt: 10px; padding-top: 10px; }
+        .settings input { width: 45px; background: #333; border: 1px solid #555; color: white; text-align: center; border-radius: 4px; padding: 3px; }
     </style>
 </head>
 <body>
+
+<div class="card">
     <div class="status" id="status">ช่วงโฟกัสงาน</div>
     <div class="timer" id="timer">25:00</div>
-    <button onclick="toggleTimer()" id="btn">เริ่มจับเวลา</button>
+    <div class="session-info" id="session-info">รอบที่ 1 / 4</div>
 
-    <script>
-        let timeLeft = 25 * 60;
-        let isRunning = false;
-        let timerId = null;
+    <div class="progress-container">
+        <div class="progress-bar" id="progress"></div>
+    </div>
 
-        function updateDisplay() {
-            let mins = Math.floor(timeLeft / 60).toString().padStart(2, '0');
-            let secs = (timeLeft % 60).toString().padStart(2, '0');
-            document.getElementById('timer').innerText = `${mins}:${secs}`;
+    <div class="controls">
+        <button onclick="toggleTimer()" id="btn-start">เริ่ม</button>
+        <button class="reset" onclick="resetTimer()">รีเซ็ต</button>
+    </div>
+
+    <div class="settings">
+        <label for="max-sessions">จำนวนรอบทั้งหมด:</label>
+        <input type="number" id="max-sessions" value="4" min="1" max="10" onchange="updateMaxSessions()">
+    </div>
+</div>
+
+<script>
+    let workTime = 25 * 60;
+    let shortBreak = 5 * 60;
+    let longBreak = 15 * 60;
+
+    let timeLeft = workTime;
+    let totalTime = workTime;
+    let isRunning = false;
+    let timerId = null;
+    let currentSession = 1;
+    let maxSessions = 4;
+    let isBreak = false;
+
+    function updateDisplay() {
+        let mins = Math.floor(timeLeft / 60).toString().padStart(2, '0');
+        let secs = (timeLeft % 60).toString().padStart(2, '0');
+        document.getElementById('timer').innerText = `${mins}:${secs}`;
+        
+        // อัปเดตหลอด Progress Bar
+        let percentage = ((totalTime - timeLeft) / totalTime) * 100;
+        document.getElementById('progress').style.width = `${percentage}%`;
+        document.getElementById('session-info').innerText = `รอบที่ ${currentSession} / ${maxSessions}`;
+    }
+
+    function toggleTimer() {
+        if (isRunning) {
+            clearInterval(timerId);
+            document.getElementById('btn-start').innerText = "ทำต่อ";
+        } else {
+            timerId = setInterval(() => {
+                if (timeLeft > 0) {
+                    timeLeft--;
+                    updateDisplay();
+                } else {
+                    playBeep();
+                    clearInterval(timerId);
+                    handleSessionComplete();
+                }
+            }, 1000);
+            document.getElementById('btn-start').innerText = "พัก";
         }
+        isRunning = !isRunning;
+    }
 
-        function toggleTimer() {
-            if (isRunning) {
-                clearInterval(timerId);
-                document.getElementById('btn').innerText = "เริ่มต่อ";
+    function handleSessionComplete() {
+        if (!isBreak) {
+            if (currentSession >= maxSessions) {
+                document.getElementById('status').innerText = "ช่วงพักยาว 🎉";
+                timeLeft = longBreak;
+                totalTime = longBreak;
+                currentSession = 1; 
             } else {
-                timerId = setInterval(() => {
-                    if (timeLeft > 0) {
-                        timeLeft--;
-                        updateDisplay();
-                    } else {
-                        clearInterval(timerId);
-                        alert("หมดเวลาโฟกัสแล้ว!");
-                    }
-                }, 1000);
-                document.getElementById('btn').innerText = "หยุดชั่วคราว";
+                document.getElementById('status').innerText = "ช่วงพักสั้น ☕";
+                timeLeft = shortBreak;
+                totalTime = shortBreak;
             }
-            isRunning = !isRunning;
+            isBreak = true;
+        } else {
+            if (!document.getElementById('status').innerText.includes("พักยาว")) {
+                currentSession++;
+            }
+            document.getElementById('status').innerText = "ช่วงโฟกัสงาน 💻";
+            timeLeft = workTime;
+            totalTime = workTime;
+            isBreak = false;
         }
+        isRunning = false;
+        document.getElementById('btn-start').innerText = "เริ่ม";
         updateDisplay();
-    </script>
+    }
+
+    function resetTimer() {
+        clearInterval(timerId);
+        isRunning = false;
+        isBreak = false;
+        currentSession = 1;
+        timeLeft = workTime;
+        totalTime = workTime;
+        document.getElementById('status').innerText = "ช่วงโฟกัสงาน 💻";
+        document.getElementById('btn-start').innerText = "เริ่ม";
+        updateDisplay();
+    }
+
+    function updateMaxSessions() {
+        let input = document.getElementById('max-sessions').value;
+        maxSessions = parseInt(input) || 4;
+        updateDisplay();
+    }
+
+    function playBeep() {
+        let ctx = new (window.AudioContext || window.webkitAudioContext)();
+        let osc = ctx.createOscillator();
+        osc.connect(ctx.destination);
+        osc.frequency.value = 800;
+        osc.start();
+        osc.stop(ctx.currentTime + 0.5);
+    }
+
+    updateDisplay();
+</script>
+
 </body>
 </html>
