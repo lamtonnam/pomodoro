@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Pomodoro Timer</title>
+    <title>Custom Pomodoro Timer</title>
     <style>
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
@@ -29,16 +29,23 @@
         button:hover { opacity: 0.9; }
         button.reset { background-color: #e05252; }
         
-        .settings { display: flex; align-items: center; justify-content: space-between; font-size: 12px; color: #ccc; border-top: 1px solid #444; pt: 10px; padding-top: 10px; }
-        .settings input { width: 45px; background: #333; border: 1px solid #555; color: white; text-align: center; border-radius: 4px; padding: 3px; }
+        .settings-grid {
+            display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
+            font-size: 12px; color: #ccc; border-top: 1px solid #444; padding-top: 12px; text-align: left;
+        }
+        .settings-item { display: flex; flex-direction: column; gap: 4px; }
+        .settings-item input {
+            background: #333; border: 1px solid #555; color: white;
+            text-align: center; border-radius: 4px; padding: 4px; font-size: 13px;
+        }
     </style>
 </head>
 <body>
 
 <div class="card">
-    <div class="status" id="status">ช่วงโฟกัสงาน</div>
+    <div class="status" id="status">ช่วงโฟกัสงาน 💻</div>
     <div class="timer" id="timer">25:00</div>
-    <div class="session-info" id="session-info">รอบที่ 1 / 4</div>
+    <div class="session-info" id="session-info">รอบโฟกัสที่ 1</div>
 
     <div class="progress-container">
         <div class="progress-bar" id="progress"></div>
@@ -49,34 +56,42 @@
         <button class="reset" onclick="resetTimer()">รีเซ็ต</button>
     </div>
 
-    <div class="settings">
-        <label for="max-sessions">จำนวนรอบทั้งหมด:</label>
-        <input type="number" id="max-sessions" value="4" min="1" max="10" onchange="updateMaxSessions()">
+    <div class="settings-grid">
+        <div class="settings-item">
+            <label for="work-time">เวลาโฟกัส (นาที):</label>
+            <input type="number" id="work-time" value="25" min="1" max="120" onchange="applyCustomTimes()">
+        </div>
+        <div class="settings-item">
+            <label for="break-time">เวลาพัก (นาที):</label>
+            <input type="number" id="break-time" value="5" min="1" max="60" onchange="applyCustomTimes()">
+        </div>
     </div>
 </div>
 
 <script>
-    let workTime = 25 * 60;
-    let shortBreak = 5 * 60;
-    let longBreak = 15 * 60;
+    let workMinutes = 25;
+    let breakMinutes = 5;
 
-    let timeLeft = workTime;
-    let totalTime = workTime;
+    let totalTime = workMinutes * 60;
+    let timeLeft = totalTime;
     let isRunning = false;
-    let timerId = null;
-    let currentSession = 1;
-    let maxSessions = 4;
     let isBreak = false;
+    let timerId = null;
+    let focusCount = 1;
 
     function updateDisplay() {
         let mins = Math.floor(timeLeft / 60).toString().padStart(2, '0');
         let secs = (timeLeft % 60).toString().padStart(2, '0');
         document.getElementById('timer').innerText = `${mins}:${secs}`;
         
-        // อัปเดตหลอด Progress Bar
         let percentage = ((totalTime - timeLeft) / totalTime) * 100;
         document.getElementById('progress').style.width = `${percentage}%`;
-        document.getElementById('session-info').innerText = `รอบที่ ${currentSession} / ${maxSessions}`;
+
+        if (!isBreak) {
+            document.getElementById('session-info').innerText = `รอบโฟกัสที่ ${focusCount}`;
+        } else {
+            document.getElementById('session-info').innerText = `ช่วงพักหลังรอบที่ ${focusCount}`;
+        }
     }
 
     function toggleTimer() {
@@ -91,7 +106,7 @@
                 } else {
                     playBeep();
                     clearInterval(timerId);
-                    handleSessionComplete();
+                    switchSession();
                 }
             }, 1000);
             document.getElementById('btn-start').innerText = "พัก";
@@ -99,30 +114,36 @@
         isRunning = !isRunning;
     }
 
-    function handleSessionComplete() {
-        if (!isBreak) {
-            if (currentSession >= maxSessions) {
-                document.getElementById('status').innerText = "ช่วงพักยาว 🎉";
-                timeLeft = longBreak;
-                totalTime = longBreak;
-                currentSession = 1; 
-            } else {
-                document.getElementById('status').innerText = "ช่วงพักสั้น ☕";
-                timeLeft = shortBreak;
-                totalTime = shortBreak;
-            }
-            isBreak = true;
+    function switchSession() {
+        // สลับสถานะระหว่าง โฟกัส <-> พัก
+        isBreak = !isBreak;
+
+        if (isBreak) {
+            document.getElementById('status').innerText = "ช่วงพักผ่อน ☕";
+            totalTime = breakMinutes * 60;
         } else {
-            if (!document.getElementById('status').innerText.includes("พักยาว")) {
-                currentSession++;
-            }
+            focusCount++;
             document.getElementById('status').innerText = "ช่วงโฟกัสงาน 💻";
-            timeLeft = workTime;
-            totalTime = workTime;
-            isBreak = false;
+            totalTime = workMinutes * 60;
         }
+
+        timeLeft = totalTime;
         isRunning = false;
         document.getElementById('btn-start').innerText = "เริ่ม";
+        updateDisplay();
+    }
+
+    function applyCustomTimes() {
+        if (isRunning) return; // ไม่ให้แก้ขณะนาฬิกากำลังเดิน
+        
+        let workInput = parseInt(document.getElementById('work-time').value);
+        let breakInput = parseInt(document.getElementById('break-time').value);
+
+        if (workInput > 0) workMinutes = workInput;
+        if (breakInput > 0) breakMinutes = breakInput;
+
+        totalTime = (isBreak ? breakMinutes : workMinutes) * 60;
+        timeLeft = totalTime;
         updateDisplay();
     }
 
@@ -130,17 +151,10 @@
         clearInterval(timerId);
         isRunning = false;
         isBreak = false;
-        currentSession = 1;
-        timeLeft = workTime;
-        totalTime = workTime;
+        focusCount = 1;
+        applyCustomTimes();
         document.getElementById('status').innerText = "ช่วงโฟกัสงาน 💻";
         document.getElementById('btn-start').innerText = "เริ่ม";
-        updateDisplay();
-    }
-
-    function updateMaxSessions() {
-        let input = document.getElementById('max-sessions').value;
-        maxSessions = parseInt(input) || 4;
         updateDisplay();
     }
 
