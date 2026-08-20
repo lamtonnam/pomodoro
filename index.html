@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Custom Pomodoro Timer</title>
+    <title>Background Pomodoro Timer</title>
     <style>
         body {
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
@@ -72,77 +72,81 @@
     let workMinutes = 25;
     let breakMinutes = 5;
 
-    let totalTime = workMinutes * 60;
-    let timeLeft = totalTime;
+    let timerId = null;
     let isRunning = false;
     let isBreak = false;
-    let timerId = null;
     let focusCount = 1;
+    let endTime = null;
+    let totalDuration = workMinutes * 60;
 
     function updateDisplay() {
-        let mins = Math.floor(timeLeft / 60).toString().padStart(2, '0');
-        let secs = (timeLeft % 60).toString().padStart(2, '0');
+        let now = Date.now();
+        let remainingSeconds = isRunning ? Math.max(0, Math.ceil((endTime - now) / 1000)) : totalDuration;
+
+        let mins = Math.floor(remainingSeconds / 60).toString().padStart(2, '0');
+        let secs = (remainingSeconds % 60).toString().padStart(2, '0');
         document.getElementById('timer').innerText = `${mins}:${secs}`;
         
-        let percentage = ((totalTime - timeLeft) / totalTime) * 100;
+        let percentage = ((totalDuration - remainingSeconds) / totalDuration) * 100;
         document.getElementById('progress').style.width = `${percentage}%`;
 
-        if (!isBreak) {
-            document.getElementById('session-info').innerText = `รอบโฟกัสที่ ${focusCount}`;
-        } else {
-            document.getElementById('session-info').innerText = `ช่วงพักหลังรอบที่ ${focusCount}`;
+        document.getElementById('session-info').innerText = !isBreak 
+            ? `รอบโฟกัสที่ ${focusCount}` 
+            : `ช่วงพักหลังรอบที่ ${focusCount}`;
+
+        return remainingSeconds;
+    }
+
+    function tick() {
+        let remaining = updateDisplay();
+        if (remaining <= 0 && isRunning) {
+            clearInterval(timerId);
+            playBeep();
+            switchSession();
         }
     }
 
     function toggleTimer() {
         if (isRunning) {
+            // หยุดชั่วคราว
             clearInterval(timerId);
+            totalDuration = Math.max(0, Math.ceil((endTime - Date.now()) / 1000));
+            isRunning = false;
             document.getElementById('btn-start').innerText = "ทำต่อ";
         } else {
-            timerId = setInterval(() => {
-                if (timeLeft > 0) {
-                    timeLeft--;
-                    updateDisplay();
-                } else {
-                    playBeep();
-                    clearInterval(timerId);
-                    switchSession();
-                }
-            }, 1000);
+            // เริ่มนับ
+            endTime = Date.now() + (totalDuration * 1000);
+            isRunning = true;
+            timerId = setInterval(tick, 250); // เช็กถี่ขึ้นเพื่อความแม่นยำ
             document.getElementById('btn-start').innerText = "พัก";
         }
-        isRunning = !isRunning;
     }
 
     function switchSession() {
         isBreak = !isBreak;
-
         if (isBreak) {
             document.getElementById('status').innerText = "ช่วงพักผ่อน ☕";
-            totalTime = breakMinutes * 60;
+            totalDuration = breakMinutes * 60;
         } else {
             focusCount++;
             document.getElementById('status').innerText = "ช่วงโฟกัสงาน 💻";
-            totalTime = workMinutes * 60;
+            totalDuration = workMinutes * 60;
         }
 
-        timeLeft = totalTime;
         isRunning = false;
         document.getElementById('btn-start').innerText = "เริ่ม";
         updateDisplay();
     }
 
     function applyCustomTimes() {
-        if (isRunning) return; // ไม่ให้แก้ขณะนาฬิกากำลังเดิน
-        
+        if (isRunning) return;
         let workInput = parseInt(document.getElementById('work-time').value);
         let breakInput = parseInt(document.getElementById('break-time').value);
 
         if (workInput > 0) workMinutes = workInput;
         if (breakInput > 0) breakMinutes = breakInput;
 
-        totalTime = (isBreak ? breakMinutes : workMinutes) * 60;
-        timeLeft = totalTime;
+        totalDuration = (isBreak ? breakMinutes : workMinutes) * 60;
         updateDisplay();
     }
 
@@ -165,6 +169,13 @@
         osc.start();
         osc.stop(ctx.currentTime + 0.5);
     }
+
+    // เมื่อสลับกลับเข้ามาที่หน้าแอป/Notion ให้คำนวณเวลาใหม่ทันที
+    document.addEventListener("visibilitychange", () => {
+        if (document.visibilityState === "visible" && isRunning) {
+            tick();
+        }
+    });
 
     updateDisplay();
 </script>
